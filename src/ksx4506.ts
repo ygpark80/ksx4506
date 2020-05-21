@@ -24,7 +24,7 @@ export class KSX4506Parser extends Transform {
 				if (dataframe) {
 					// this.push(dataframe)
 					this.push(KSX4506Parser.parse(dataframe))
-					this.debug(`${chalk.bold.blueBright(">>")} ${dataframe.toString("hex")}`)
+					this.debug(`${chalk.bold.blueBright(">>")} ${dataframe.toString("hex")}${chalk.white(Buffer.from(this.stack).toString("hex"))}`)
 				}
 				if (!dataframe) break
 			} catch (e) {
