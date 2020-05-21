@@ -19,15 +19,13 @@
   "dependencies": {
     "chalk": "^4.0.0",
     "debug": "^4.1.1",
-    "n-readlines": "^1.0.0",
-    "serialport": "^8.0.7"
+    "n-readlines": "^1.0.0"
   },
   "devDependencies": {
     "@testdeck/jest": "^0.0.10",
     "@types/debug": "^4.1.5",
     "@types/jest": "^25.2.1",
     "@types/n-readlines": "^1.0.0",
-    "@types/serialport": "^8.0.0",
     "jest": "^25.4.0",
     "ts-jest": "^25.4.0",
     "typescript": "^3.8.3"

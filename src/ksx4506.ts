@@ -17,7 +17,7 @@ export class KSX4506Parser extends Transform {
 		this.debug(`${chalk.bold.redBright("<<")} ${chalk.white(buffer.toString("hex"))}`)
 		buffer.forEach((value) => { this.stack.push(value) })
 		this.debug(`${chalk.bold.cyanBright("||")} ${Buffer.from(this.stack).toString("hex")}`)
-		
+
 		do {
 			try {
 				const dataframe = this.__processStack()
@@ -43,74 +43,74 @@ export class KSX4506Parser extends Transform {
 				// console.log("--skip")
 				continue
 			}
-	
+
 			// console.log(`${i}=`, stack[i].toString(16))
-	
+
 			const header = this.stack[i]
 			if (i + 4 >= this.stack.length) break
-			
+
 			const deviceId = this.stack[i + 1]
 			const subId = this.stack[i + 2]
 			const commandType = this.stack[i + 3]
 			const length = this.stack[i + 4]
 			// console.log("deviceId=", deviceId, subId, commandType, length)
-			
+
 			if (i + 4 + length + 2 >= this.stack.length) break
-	
+
 			const begin = i + 5
 			const end = i + 5 + length
 			const _data = length > 0 ? Buffer.from(this.stack.slice(begin, end)) : undefined
-	
+
 			// console.log("data=", _data)
-	
+
 			const withoutData = Buffer.from([header, deviceId, subId, commandType, length])
 			const beforeXOR = _data ? Buffer.concat([withoutData, _data]) : withoutData
 			const _xor = xor(beforeXOR)
 			const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
 			const _add = add(beforeADD)
 			const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
-	
+
 			const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
 			const data = Buffer.from(this.stack.slice(i, i + 4 + length + 2 + 1))
-	
+
 			this.stack = this.stack.slice(i + 4 + length + 2 + 1)
-	
+
 			if (data.compare(checksum) !== 0) {
 				console.log("data:", data, i, this.stack.length)
 				console.log("chec:", checksum)
 				throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
 			}
-			
+
 			return checksum
 		}
 		return undefined
-    }
-    
-    static parse(data: Buffer): DataFrame {
-        const header = data[0]
-        const deviceId = data[1]
-        const subId = data[2]
-        const commandType = data[3]
-        const length = data[4]
-        const _data = length > 0 ? data.subarray(5, 5 + length) : undefined
-        
-        const withoutData = Buffer.from([header, deviceId, subId, commandType, length])
-        const beforeXOR = _data ? Buffer.concat([withoutData, _data]) : withoutData
-        const _xor = xor(beforeXOR)
-        const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
-        const _add = add(beforeADD)
-        const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
-        
-        const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
-    
-        if (data.compare(checksum) !== 0) {
-            // console.log("data:", data)
-            // console.log("checksum: ", checksum)
-            throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
-        }
-    
-        return result
-    }
+	}
+
+	static parse(data: Buffer): DataFrame {
+		const header = data[0]
+		const deviceId = data[1]
+		const subId = data[2]
+		const commandType = data[3]
+		const length = data[4]
+		const _data = length > 0 ? data.subarray(5, 5 + length) : undefined
+
+		const withoutData = Buffer.from([header, deviceId, subId, commandType, length])
+		const beforeXOR = _data ? Buffer.concat([withoutData, _data]) : withoutData
+		const _xor = xor(beforeXOR)
+		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
+		const _add = add(beforeADD)
+		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
+
+		const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
+
+		if (data.compare(checksum) !== 0) {
+			// console.log("data:", data)
+			// console.log("checksum: ", checksum)
+			throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
+		}
+
+		return result
+	}
 
 }
 

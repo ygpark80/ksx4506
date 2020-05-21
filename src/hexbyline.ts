@@ -14,6 +14,6 @@ export class HexByLineReadable extends Readable {
 	_read(size: number): void {
 		const line = this.liner.next()
 		if (line) this.push(Buffer.from(line.toString(), "hex"))
-        else this.push(null)
+		else this.push(null)
 	}
 }
