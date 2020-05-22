@@ -1,8 +1,9 @@
 import { Transform, TransformCallback } from "stream"
 import chalk from "chalk"
 import _debug from "debug"
+import JSON5 from "json5"
 
-export class KSX4506Parser extends Transform {
+export class KSX4506 extends Transform {
 
 	stack: number[] = []
 
@@ -22,8 +23,7 @@ export class KSX4506Parser extends Transform {
 			try {
 				const dataframe = this.__processStack()
 				if (dataframe) {
-					// this.push(dataframe)
-					this.push(KSX4506Parser.parse(dataframe))
+					this.push(dataframe)
 					this.debug(`${chalk.bold.blueBright(">>")} ${dataframe.toString("hex")}${chalk.white(Buffer.from(this.stack).toString("hex"))}`)
 				}
 				if (!dataframe) break
@@ -101,7 +101,7 @@ export class KSX4506Parser extends Transform {
 		const _add = add(beforeADD)
 		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
 
-		const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
+		const result = new DataFrame(deviceId, subId, commandType, length, _data, _xor, _add)
 
 		if (data.compare(checksum) !== 0) {
 			// console.log("data:", data)
@@ -114,15 +114,42 @@ export class KSX4506Parser extends Transform {
 
 }
 
-export interface DataFrame {
-	header: number
-	deviceId: number
-	subId: number
-	commandType: number
-	length: number
-	data?: Buffer
-	xor: number
-	add: number
+export class DataFrame {
+	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, private length: number,
+		private data: Buffer | undefined, private xor: number, private add: number) {
+	}
+
+	public toString = (): string => {
+		const result: any = {
+			DeviceID: `${DeviceID[this.deviceId]} (0x${Buffer.from([this.deviceId]).toString("hex")})`,
+			SubID: this.subId,
+			CommandType: `${CommandType[this.commandType]} (0x${Buffer.from([this.commandType]).toString("hex")})`,
+			Length: this.length,
+			Data: this.data?.toString("hex")
+		}
+
+		if (this.deviceId == DeviceID.온도조절기 && this.commandType == CommandType.상태응답 && this.data) {
+			result.온도조절기 = {
+				에러상태코드: Buffer.from([this.data[0]]).toString("hex"),
+				난방상태: Buffer.from([this.data[1]]).toString("hex"),
+				외출기능상태: Buffer.from([this.data[2]]).toString("hex"),
+				예약기능상태: Buffer.from([this.data[3]]).toString("hex"),
+				온수전용상태: this.data[4] == 0x01 ? "ON" : "OFF"
+			}
+			result.온도조절기.난방 = []
+			for (let i = 0; i < ((this.data.length - 5) / 2); i++) {
+				result.온도조절기.난방[i] = {
+					난방상태: ((this.data[1] >> i) & 1) == 1 ? "ON" : "OFF",
+					외출기능상태: ((this.data[2] >> i) & 1) == 1 ? "ON" : "OFF",
+					예약기능상태: ((this.data[3] >> i) & 1) == 1 ? "ON" : "OFF",
+					설정온도: `${this.data[5 + (i * 2)]} (0x${Buffer.from([this.data[5 + i]]).toString("hex")})`,
+					현재온도: `${this.data[5 + (i * 2) + 1]} (0x${Buffer.from([this.data[5 + i + 1]]).toString("hex")})`,
+				}
+			}
+		}
+
+		return JSON5.stringify(result, null, 2)
+	}
 }
 
 export enum DeviceID {
@@ -148,11 +175,23 @@ export enum DeviceID {
 export enum CommandType {
 	상태요구 = 0x01,
 	특성요구 = 0x0f,
+	상태응답 = 0x81,
+	특성응답 = 0x8f,
 	개별동작제어요구 = 0x41,
 	개별동작제어응답 = 0xc1,
 	전체동작제어요구 = 0x42,
-	상태응답 = 0x81,
-	특성응답 = 0x8f
+
+	// 온도조절기
+	난방ONOFF동작제어요구 = 0x43,
+	설정온도변경동작제어요구 = 0x44,
+	예약기능ONOFF동작제어요구 = 0x45,
+	외출기능ONOFF동작제어요구 = 0x46,
+	온수전용ONOFF동작제어요구 = 0x47,
+	난방ONOFF동작제어응답 = 0xc3,
+	설정온도변경동작제어응답 = 0xc4,
+	예약기능ONOFF동작제어응답 = 0xc5,
+	외출기능ONOFF동작제어응답 = 0xc6,
+	온수전용ONOFF동작제어응답 = 0xc7,
 }
 
 export function xor(buffer: Buffer) {

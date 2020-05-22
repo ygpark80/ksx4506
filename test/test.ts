@@ -1,5 +1,5 @@
 import { suite, test } from '@testdeck/jest'
-import { KSX4506Parser, DataFrame } from '../src/ksx4506'
+import { KSX4506, DataFrame } from '../src/ksx4506'
 import { HexByLineReadable } from '../src/hexbyline';
 
 @suite
@@ -7,7 +7,7 @@ class TestSuite {
 
 	@test
 	async test() {
-		const parser = new KSX4506Parser()
+		const parser = new KSX4506()
 		const port = new HexByLineReadable("test/dump")
 		port.pipe(parser)
 
