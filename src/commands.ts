@@ -39,16 +39,20 @@ class Commands {
 			.action((args) => this.measure(args))
 
 		vorpal
-			.command("measure2")
-			.action((args) => this.measure2(args))
+			.command("breaker")
+			.action((args) => this.breaker(args))
 
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
 
-			// if (dataframe.deviceId != 64 && dataframe.deviceId != 96 && dataframe.deviceId != DeviceID.전등
-			//     && dataframe.deviceId != DeviceID.원격검침기 && dataframe.deviceId != DeviceID.대기전력차단기기
-			//     && dataframe.deviceId != DeviceID.일괄차단기 && dataframe.deviceId != DeviceID.온도조절기
-			//     && dataframe.deviceId != DeviceID.가스밸브) {
+			// if (dataframe.deviceId != 0x40
+			// 	&& dataframe.deviceId != DeviceID.전등 && dataframe.deviceId != DeviceID.원격검침기 && dataframe.deviceId != DeviceID.대기전력차단기기
+			// 	// && dataframe.deviceId != DeviceID.일괄차단기 && dataframe.deviceId != DeviceID.가스밸브
+			// 	&& dataframe.deviceId != DeviceID.온도조절기
+			// 	&& dataframe.deviceId != 0x60) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
+
 			// if (dataframe.deviceId == DeviceID.전등 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
 			//     this.vorpal.log("dataframe=", dataframe.toString())
 			// }
@@ -68,9 +72,16 @@ class Commands {
 			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType == CommandType.상태응답 && dataframe.subId != 0x03) {
 			// 	this.vorpal.log("dataframe=", dataframe.toString())
 			// }
-			if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
+			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
+
+			if (dataframe.deviceId == DeviceID.일괄차단기) {
 				this.vorpal.log("dataframe=", dataframe.toString())
 			}
+			// if (dataframe.deviceId == DeviceID.일괄차단기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
 		})
 
 	}
@@ -106,8 +117,8 @@ class Commands {
 		this.vorpal.log(`${dataframe.toString()}`)
 	}
 
-	async measure2(args: Vorpal.Args) {
-		const dataframe = 원격검침기.세대검침특성요구()
+	async breaker(args: Vorpal.Args) {
+		const dataframe = new DataFrame(DeviceID.일괄차단기, 0x01, CommandType.특성요구)
 		this.socket?.write(dataframe.toBuffer())
 		this.vorpal.log(`${dataframe.toString()}`)
 	}

@@ -181,6 +181,28 @@ export class DataFrame {
 			Data: this.data ? `${this.data?.toString("hex")} (${this.data?.map((v) => v).join(" ")})` : undefined
 		}
 
+		// 일괄차단기
+		if (this.deviceId == DeviceID.일괄차단기 && this.commandType == CommandType.상태응답 && this.data) {
+			result.일괄차단기 = {
+				엘리베이터하강호출요구: ((this.data[1] >> 5) & 1) == 1 ? "요구" : "요구 없음",
+				엘리베이터상승호출요구: ((this.data[1] >> 4) & 1) == 1 ? "요구" : "요구 없음",
+				대기전력차단릴레이ONOFF상태: ((this.data[1] >> 3) & 1) == 1 ? "ON" : "OFF",
+				일괄전등차단릴레이ONOFF상태: ((this.data[1] >> 2) & 1) == 1 ? "ON" : "OFF",
+				외출설정요구: ((this.data[1] >> 1) & 1) == 1 ? "요구" : "요구 없음",
+				가스잠금요구: (this.data[1] & 1) == 1 ? "요구" : "요구 없음",
+			}
+		}
+
+		if (this.deviceId == DeviceID.일괄차단기 && this.commandType == CommandType.특성응답 && this.data) {
+			result.일괄차단기 = {
+				엘리베이터층표시기능: ((this.data[1] >> 4) & 1) == 1 ? "있음" : "없음",
+				엘리베이터호출기능: ((this.data[1] >> 3) & 1) == 1 ? "있음" : "없음",
+				대기전력제어기능: ((this.data[1] >> 2) & 1) == 1 ? "있음" : "없음",
+				외출설정기능: ((this.data[1] >> 1) & 1) == 1 ? "있음" : "없음",
+				가스잠금기능: (this.data[1] & 1) == 1 ? "있음" : "없음",
+			}
+		}
+
 		// 원격검침기
 		if (this.deviceId == DeviceID.원격검침기 && this.commandType == CommandType.상태응답 && this.data) {
 			const values = [
@@ -192,6 +214,9 @@ export class DataFrame {
 				(this.data[6] >> 4), (this.data[6] & 0x0f),
 				(this.data[7] >> 4), (this.data[7] & 0x0f),
 			]
+
+			// 사용량은 표준과 다른 것 같음
+			// 사용량은 서리자의 경우 누적 총사용량 같음
 			let 순시치 = 0, 사용량 = 0
 			switch (this.subId) {
 				case 0x01: // 수도 검침
@@ -230,7 +255,7 @@ export class DataFrame {
 			}
 		}
 
-		// 대기전력
+		// 대기전력차단기기
 		if (this.deviceId == DeviceID.대기전력차단기기 && this.commandType == CommandType.상태응답 && this.data) {
 			result.대기전력차단기기 = {
 				에러상태: this.data[0],
@@ -324,6 +349,8 @@ export enum DeviceID {
 	대기전력차단기기 = 0x39
 }
 
+// CommandType이 device 당 있어야 함
+// 상속 구조도 가능함 (상태요구, 특성요구 같은건 항상 있음)
 export enum CommandType {
 	상태요구 = 0x01,
 	특성요구 = 0x0f,
