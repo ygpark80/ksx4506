@@ -7,14 +7,6 @@ export function commands(vorpal: Vorpal) {
 	new Commands(vorpal)
 }
 
-const 우리집 = {
-	온도조절기: {
-		거실: 17,
-		침실1: 18
-	},
-	전등: { 거실: 17 }
-}
-
 class Commands {
 
 	parser = new KSX4506()
@@ -49,19 +41,14 @@ class Commands {
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
 
-			if (dataframe.deviceId != 0x40 && dataframe.deviceId != 0x60) {
-				console.log(dataframe.toString())
-			}
+			// if (dataframe.deviceId != 0x40 && dataframe.deviceId != 0x60) {
+			// 	console.log(dataframe.toString())
+			// }
 
-			// if (dataframe.deviceId != 0x40
-			// 	// && dataframe.deviceId != 0x60
-			// 	&& dataframe.deviceId != DeviceID.전등
-			// 	&& dataframe.deviceId != DeviceID.원격검침기
-			// 	&& dataframe.deviceId != DeviceID.대기전력차단기기
-			// 	&& dataframe.deviceId != DeviceID.일괄차단기
-			// 	&& dataframe.deviceId != DeviceID.가스밸브
-			// 	&& dataframe.deviceId != DeviceID.온도조절기
-			// 	) {
+			// if (dataframe.deviceId != 0x40 && dataframe.deviceId != 0x60
+			// 	&& dataframe.deviceId != DeviceID.전등 && dataframe.deviceId != DeviceID.원격검침기 && dataframe.deviceId != DeviceID.대기전력차단기기
+			// 	// && dataframe.deviceId != DeviceID.일괄차단기
+			// 	&& dataframe.deviceId != DeviceID.가스밸브 && dataframe.deviceId != DeviceID.온도조절기) {
 			// 	this.vorpal.log("dataframe=", dataframe.toString())
 			// }
 
@@ -98,6 +85,10 @@ class Commands {
 			// if (dataframe.deviceId == 0x40 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
 			// 	this.vorpal.log("dataframe=", dataframe.toString())
 			// }
+
+			if (dataframe.deviceId != 0x40 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
+				this.vorpal.log("dataframe=", dataframe.toString())
+			}
 		})
 
 	}

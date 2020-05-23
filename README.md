@@ -11,6 +11,13 @@ yarn add ksx4506
 ## Code Example
 
 ```typescript
+const parser = new KSX4506()
+parser.on("data", (data: Buffer) => {
+    const dataframe = KSX4506.parse(data)
+
+    console.log(dataframe)
+})
+
 const port = new SerialPort("/dev/tty.usbserial-AQ00WHW9", {
     baudRate: 9600,
     dataBits: 8,
@@ -19,7 +26,4 @@ const port = new SerialPort("/dev/tty.usbserial-AQ00WHW9", {
     autoOpen: true
 })
 port.pipe(parser)
-parser.on("data", (dataframe: DataFrame) => {
-    console.log(dataframe)
-})
 ```
