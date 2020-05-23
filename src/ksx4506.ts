@@ -28,7 +28,7 @@ export class KSX4506 extends Transform {
 				}
 				if (!dataframe) break
 			} catch (e) {
-				console.log(e, e.stack)
+				// console.log(e, e.stack)
 			}
 		} while (true)
 
@@ -70,14 +70,13 @@ export class KSX4506 extends Transform {
 			const _add = add(beforeADD)
 			const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
 
-			const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
 			const data = Buffer.from(this.stack.slice(i, i + 4 + length + 2 + 1))
 
 			this.stack = this.stack.slice(i + 4 + length + 2 + 1)
 
 			if (data.compare(checksum) !== 0) {
-				console.log("data:", data, i, this.stack.length)
-				console.log("chec:", checksum)
+				// console.log("data:", data, i, this.stack.length)
+				// console.log("chec:", checksum)
 				throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
 			}
 
@@ -101,7 +100,7 @@ export class KSX4506 extends Transform {
 		const _add = add(beforeADD)
 		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
 
-		const result = new DataFrame(deviceId, subId, commandType, length, _data, _xor, _add)
+		const result = new DataFrame(deviceId, subId, commandType, length, _data)
 
 		if (data.compare(checksum) !== 0) {
 			// console.log("data:", data)
@@ -114,21 +113,61 @@ export class KSX4506 extends Transform {
 
 }
 
+export class 온도조절기 {
+
+	static 특성요구(subId: number) {
+		const dataframe = new DataFrame(DeviceID.온도조절기, subId, CommandType.특성요구, 0)
+		return dataframe
+	}
+
+}
+
 export class DataFrame {
+	
 	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, private length: number,
-		private data: Buffer | undefined, private xor: number, private add: number) {
+		private data?: Buffer) {
+	}
+
+	toBuffer() {
+		const withoutData = Buffer.from([ Header, this.deviceId, this.subId, this.commandType, this.length])
+		const beforeXOR = this.data ? Buffer.concat([withoutData, this.data]) : withoutData
+		const _xor = xor(beforeXOR)
+		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
+		const _add = add(beforeADD)
+		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
+
+		return checksum
 	}
 
 	public toString = (): string => {
 		const result: any = {
 			DeviceID: `${DeviceID[this.deviceId]} (0x${Buffer.from([this.deviceId]).toString("hex")})`,
-			SubID: this.subId,
+			SubID: `${this.subId} (0x${Buffer.from([this.subId]).toString("hex")})`,
 			CommandType: `${CommandType[this.commandType]} (0x${Buffer.from([this.commandType]).toString("hex")})`,
 			Length: this.length,
 			Data: this.data?.toString("hex")
 		}
 
-		if (this.deviceId == DeviceID.온도조절기 && this.commandType == CommandType.상태응답 && this.data) {
+		const request = ([
+			CommandType.난방ONOFF동작제어요구, CommandType.예약기능ONOFF동작제어요구, CommandType.외출기능ONOFF동작제어요구, CommandType.온수전용ONOFF동작제어요구
+		].indexOf(this.commandType) > 0)
+		if (this.deviceId == DeviceID.온도조절기 && request && this.data) {
+			result.온도조절기 = {
+				동작제어요구: this.data[0] == 0x01 ? "ON" : "OFF"
+			}
+		}
+
+		if (this.deviceId == DeviceID.온도조절기 && this.commandType == CommandType.설정온도변경동작제어요구 && this.data) {
+			result.온도조절기 = {
+				동작제어요구: `${this.data[0]} (0x${Buffer.from([this.data[0]]).toString("hex")}), 0.5°C 여부: ${((this.data[0] >> 7) & 1) ? "유" : "무"}`
+			}
+		}
+
+		const response = ([
+			CommandType.상태응답, CommandType.난방ONOFF동작제어응답, CommandType.설정온도변경동작제어응답, CommandType.예약기능ONOFF동작제어응답,
+			CommandType.외출기능ONOFF동작제어응답, CommandType.온수전용ONOFF동작제어응답
+		].indexOf(this.commandType) >= 0)
+		if (this.deviceId == DeviceID.온도조절기 && response && this.data) {
 			result.온도조절기 = {
 				에러상태코드: Buffer.from([this.data[0]]).toString("hex"),
 				난방상태: Buffer.from([this.data[1]]).toString("hex"),
@@ -142,8 +181,8 @@ export class DataFrame {
 					난방상태: ((this.data[1] >> i) & 1) == 1 ? "ON" : "OFF",
 					외출기능상태: ((this.data[2] >> i) & 1) == 1 ? "ON" : "OFF",
 					예약기능상태: ((this.data[3] >> i) & 1) == 1 ? "ON" : "OFF",
-					설정온도: `${this.data[5 + (i * 2)]} (0x${Buffer.from([this.data[5 + i]]).toString("hex")})`,
-					현재온도: `${this.data[5 + (i * 2) + 1]} (0x${Buffer.from([this.data[5 + i + 1]]).toString("hex")})`,
+					설정온도: `${this.data[5 + (i * 2)]} (0x${Buffer.from([this.data[5 + (i * 2)]]).toString("hex")}), 0.5°C 여부: ${((this.data[5 + (i * 2)] >> 7) & 1) ? "유" : "무"}`,
+					현재온도: `${this.data[5 + (i * 2) + 1]} (0x${Buffer.from([this.data[5 + (i * 2) + 1]]).toString("hex")}), 0.5°C 여부: ${((this.data[5 + (i * 2) + 1] >> 7) & 1) ? "유" : "무"}`,
 				}
 			}
 		}
@@ -151,6 +190,8 @@ export class DataFrame {
 		return JSON5.stringify(result, null, 2)
 	}
 }
+
+const Header = 0xf7
 
 export enum DeviceID {
 	시스템에어컨 = 0x02,
