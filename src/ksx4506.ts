@@ -100,7 +100,7 @@ export class KSX4506 extends Transform {
 		const _add = add(beforeADD)
 		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
 
-		const result = new DataFrame(deviceId, subId, commandType, length, _data)
+		const result = new DataFrame(deviceId, subId, commandType, _data)
 
 		if (data.compare(checksum) !== 0) {
 			// console.log("data:", data)
@@ -115,21 +115,46 @@ export class KSX4506 extends Transform {
 
 export class 온도조절기 {
 
+	static 난방(subId: number, command: "ON" | "OFF") {
+		const data = command == "ON" ? Buffer.from([1]) : Buffer.from([0])
+		return new DataFrame(DeviceID.온도조절기, subId, CommandType.난방ONOFF동작제어요구, data)
+	}
+
+	static 외출기능(subId: number, command: "ON" | "OFF") {
+		const data = command == "ON" ? Buffer.from([1]) : Buffer.from([0])
+		return new DataFrame(DeviceID.온도조절기, subId, CommandType.외출기능ONOFF동작제어요구, data)
+	}
+
 	static 특성요구(subId: number) {
-		const dataframe = new DataFrame(DeviceID.온도조절기, subId, CommandType.특성요구, 0)
-		return dataframe
+		return new DataFrame(DeviceID.온도조절기, subId, CommandType.특성요구)
+	}
+
+}
+
+export class 전등 {
+
+	// 표준이랑 다름
+	static 개별동작(subId: number, index: number, command: "ON" | "OFF") {
+		// data0 = 전등 index
+		// data1 = ON = 1, OFF = 0
+		// data0 = ??
+		const data = command == "ON" ? Buffer.from([index, 1, 0]) : Buffer.from([index, 0, 0])
+		return new DataFrame(DeviceID.전등, subId, CommandType.개별동작제어요구, data)
 	}
 
 }
 
 export class DataFrame {
-	
-	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, public length: number,
-		public data?: Buffer) {
+
+	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, public data?: Buffer) {
+	}
+
+	get length() {
+		return this.data ? this.data.length : 0
 	}
 
 	toBuffer() {
-		const withoutData = Buffer.from([ Header, this.deviceId, this.subId, this.commandType, this.length])
+		const withoutData = Buffer.from([Header, this.deviceId, this.subId, this.commandType, this.length])
 		const beforeXOR = this.data ? Buffer.concat([withoutData, this.data]) : withoutData
 		const _xor = xor(beforeXOR)
 		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
@@ -218,15 +243,18 @@ export enum CommandType {
 	특성요구 = 0x0f,
 	상태응답 = 0x81,
 	특성응답 = 0x8f,
+
+	// 조명
 	개별동작제어요구 = 0x41,
 	개별동작제어응답 = 0xc1,
+
 	전체동작제어요구 = 0x42,
 
 	// 온도조절기
 	난방ONOFF동작제어요구 = 0x43,
 	설정온도변경동작제어요구 = 0x44,
-	예약기능ONOFF동작제어요구 = 0x45,
-	외출기능ONOFF동작제어요구 = 0x46,
+	외출기능ONOFF동작제어요구 = 0x45,
+	예약기능ONOFF동작제어요구 = 0x46,
 	온수전용ONOFF동작제어요구 = 0x47,
 	난방ONOFF동작제어응답 = 0xc3,
 	설정온도변경동작제어응답 = 0xc4,
