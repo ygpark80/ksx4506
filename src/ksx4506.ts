@@ -113,6 +113,14 @@ export class KSX4506 extends Transform {
 
 }
 
+export class 원격검침기 {
+
+	static 세대검침특성요구() {
+		return new DataFrame(DeviceID.원격검침기, 0x0f, CommandType.특성요구)
+	}
+
+}
+
 export class 온도조절기 {
 
 	static 난방(subId: number, command: "ON" | "OFF") {
@@ -170,7 +178,56 @@ export class DataFrame {
 			SubID: `${this.subId} (0x${Buffer.from([this.subId]).toString("hex")})`,
 			CommandType: `${CommandType[this.commandType]} (0x${Buffer.from([this.commandType]).toString("hex")})`,
 			Length: this.length,
-			Data: `${this.data?.toString("hex")} (${this.data?.map((v) => v).join (" ")})`
+			Data: this.data ? `${this.data?.toString("hex")} (${this.data?.map((v) => v).join(" ")})` : undefined
+		}
+
+		// 원격검침기
+		if (this.deviceId == DeviceID.원격검침기 && this.commandType == CommandType.상태응답 && this.data) {
+			const values = [
+				(this.data[1] >> 4), (this.data[1] & 0x0f),
+				(this.data[2] >> 4), (this.data[2] & 0x0f),
+				(this.data[3] >> 4), (this.data[3] & 0x0f),
+				(this.data[4] >> 4), (this.data[4] & 0x0f),
+				(this.data[5] >> 4), (this.data[5] & 0x0f),
+				(this.data[6] >> 4), (this.data[6] & 0x0f),
+				(this.data[7] >> 4), (this.data[7] & 0x0f),
+			]
+			let 순시치 = 0, 사용량 = 0
+			switch (this.subId) {
+				case 0x01: // 수도 검침
+				case 0x02: // 가스 검침
+				case 0x04: // 온수 검침
+					// 정수 3자리 + 소수 3자리
+					순시치 = (values[0] * 100) + (values[1] * 10) + (values[2] * 1) + (values[3] * 0.1) + (values[4] * 0.01) + (values[5] * 0.001)
+					// 정수 6자리 + 소수 2자리
+					사용량 = (values[6] * 100000) + (values[7] * 10000) + (values[8] * 1000) + (values[9] * 100) + (values[10] * 10) + (values[11] * 1) + (values[12] * 0.1) + (values[13] * 0.01)
+					break
+				case 0x03: // 전기 검침
+					// 정수 6자리
+					순시치 = (values[0] * 100000) + (values[1] * 10000) + (values[2] * 1000) + (values[3] * 100) + (values[4] * 10) + (values[5] * 1)
+					// 정수 7자리 + 소수 1자리
+					사용량 = (values[6] * 1000000) + (values[7] * 100000) + (values[8] * 10000) + (values[9] * 1000) + (values[10] * 100) + (values[11] * 10) + (values[12] * 1) + (values[13] * 0.1)
+					break
+				case 0x05: // 열량 검침
+					// 정수 3자리 + 소수 3자리
+					순시치 = (values[0] * 100) + (values[1] * 10) + (values[2] * 1) + (values[3] * 0.1) + (values[4] * 0.01) + (values[5] * 0.001)
+					// 정수 4자리 + 소수 2자리
+					사용량 = (values[6] * 1000) + (values[7] * 100) + (values[8] * 10) + (values[9] * 1) + (values[10] * 0.1) + (values[11] * 0.01)
+					break
+			}
+			result.원격검침기 = {
+				에러상태: this.data[0], 순시치, 사용량, values: values.join(" ")
+			}
+		}
+
+		if (this.deviceId == DeviceID.원격검침기 && this.commandType == CommandType.특성응답 && this.data) {
+			result.원격검침기 = {
+				열량검침: ((this.data[1] >> 4 & 1) == 1) ? "사용" : "없음",
+				온수검침: ((this.data[1] >> 3 & 1) == 1) ? "사용" : "없음",
+				전기검침: ((this.data[1] >> 2 & 1) == 1) ? "사용" : "없음",
+				가스검침: ((this.data[1] >> 1 & 1) == 1) ? "사용" : "없음",
+				수도검침: ((this.data[1] & 1) == 1) ? "사용" : "없음",
+			}
 		}
 
 		// 대기전력
@@ -278,6 +335,11 @@ export enum CommandType {
 	개별동작제어응답 = 0xc1,
 
 	전체동작제어요구 = 0x42,
+
+	차단설정값설정요구 = 0x43,
+	차단설정값요구 = 0x31,
+	차단설정값설정응답 = 0xc3,
+	차단설정값응답 = 0xb1,
 
 	// 온도조절기
 	난방ONOFF동작제어요구 = 0x43,

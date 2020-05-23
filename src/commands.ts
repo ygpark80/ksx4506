@@ -1,6 +1,6 @@
 import Vorpal from "vorpal"
 import net from "net"
-import { KSX4506, CommandType, DeviceID, 온도조절기, 전등 } from "./ksx4506"
+import { KSX4506, CommandType, DeviceID, 온도조절기, 전등, 원격검침기, DataFrame } from "./ksx4506"
 import JSON5 from "json5"
 
 export function commands(vorpal: Vorpal) {
@@ -34,6 +34,14 @@ class Commands {
 			.command("light <subId> <index> <command>")
 			.action((args) => this.light(args))
 
+		vorpal
+			.command("measure <subId>")
+			.action((args) => this.measure(args))
+
+		vorpal
+			.command("measure2")
+			.action((args) => this.measure2(args))
+
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
 
@@ -47,12 +55,22 @@ class Commands {
 			// if (DeviceID[dataframe.deviceId] != undefined && dataframe.deviceId != DeviceID.온도조절기) {
 			//     this.vorpal.log("dataframe=", dataframe.toString())
 			// }
-			if (dataframe.deviceId == DeviceID.대기전력차단기기 && dataframe.commandType == CommandType.상태응답) {
-				this.vorpal.log("dataframe=", dataframe.toString())
-			}
-			// if (dataframe.deviceId == DeviceID.대기전력차단기기) {
+			// if (dataframe.deviceId == DeviceID.대기전력차단기기 && dataframe.commandType == CommandType.상태응답) {
 			// 	this.vorpal.log("dataframe=", dataframe.toString())
 			// }
+
+			// if (dataframe.deviceId == DeviceID.원격검침기) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
+			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType == CommandType.상태응답) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
+			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType == CommandType.상태응답 && dataframe.subId != 0x03) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
+			if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
+				this.vorpal.log("dataframe=", dataframe.toString())
+			}
 		})
 
 	}
@@ -78,6 +96,20 @@ class Commands {
 		this.vorpal.log(`${JSON5.stringify(args)}`)
 		this.socket?.write(전등.개별동작(subId, index, command == "on" ? "ON" : "OFF").toBuffer())
 		this.vorpal.log(`${전등.개별동작(subId, index, command == "on" ? "ON" : "OFF").toString()}`)
+	}
+
+	async measure(args: Vorpal.Args) {
+		const { subId } = args
+
+		const dataframe = new DataFrame(DeviceID.원격검침기, subId, CommandType.상태요구)
+		this.socket?.write(dataframe.toBuffer())
+		this.vorpal.log(`${dataframe.toString()}`)
+	}
+
+	async measure2(args: Vorpal.Args) {
+		const dataframe = 원격검침기.세대검침특성요구()
+		this.socket?.write(dataframe.toBuffer())
+		this.vorpal.log(`${dataframe.toString()}`)
 	}
 
 }
