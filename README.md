@@ -18,6 +18,7 @@ parser.on("data", (data: Buffer) => {
     console.log(dataframe)
 })
 
+// via SerialPort
 const port = new SerialPort("/dev/tty.usbserial-AQ00WHW9", {
     baudRate: 9600,
     dataBits: 8,
@@ -26,4 +27,8 @@ const port = new SerialPort("/dev/tty.usbserial-AQ00WHW9", {
     autoOpen: true
 })
 port.pipe(parser)
+
+// or via Socket
+const socket = net.connect({ host: "192.168.31.21", port: 8899 })
+socket.pipe(parser)
 ```
