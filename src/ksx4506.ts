@@ -124,8 +124,8 @@ export class 온도조절기 {
 
 export class DataFrame {
 	
-	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, private length: number,
-		private data?: Buffer) {
+	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, public length: number,
+		public data?: Buffer) {
 	}
 
 	toBuffer() {
