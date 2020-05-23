@@ -47,9 +47,12 @@ class Commands {
 			// if (DeviceID[dataframe.deviceId] != undefined && dataframe.deviceId != DeviceID.온도조절기) {
 			//     this.vorpal.log("dataframe=", dataframe.toString())
 			// }
-			if (dataframe.deviceId == DeviceID.대기전력차단기기) {
+			if (dataframe.deviceId == DeviceID.대기전력차단기기 && dataframe.commandType == CommandType.상태응답) {
 				this.vorpal.log("dataframe=", dataframe.toString())
 			}
+			// if (dataframe.deviceId == DeviceID.대기전력차단기기) {
+			// 	this.vorpal.log("dataframe=", dataframe.toString())
+			// }
 		})
 
 	}
