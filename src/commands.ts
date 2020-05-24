@@ -2,6 +2,7 @@ import Vorpal from "vorpal"
 import net from "net"
 import { KSX4506, CommandType, DeviceID, 온도조절기, 전등, 원격검침기, DataFrame } from "./ksx4506"
 import JSON5 from "json5"
+import Table from "cli-table3"
 
 export function commands(vorpal: Vorpal) {
 	new Commands(vorpal)
@@ -12,6 +13,13 @@ class Commands {
 	parser = new KSX4506()
 
 	socket?: net.Socket
+
+	_states = {
+		filter: {
+			deviceIds: [] as number[]
+		},
+		knownDeviceIds: [] as number[]
+	}
 
 	constructor(private vorpal: Vorpal) {
 		vorpal
@@ -37,57 +45,29 @@ class Commands {
 		vorpal
 			.command("command <deviceId> <subId> <commandType>")
 			.action((args) => this.command(args))
+		
+		vorpal
+			.command("show <deviceId> [commandType]")
+			.action((args) => this.show(args))
+
+		vorpal
+			.command("hide <deviceId> [commandType]")
+			.action((args) => this.hide(args))
+
+		vorpal
+			.command("states")
+			.action((args) => this.states(args))
 
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
 
-			// if (dataframe.deviceId != 0x40 && dataframe.deviceId != 0x60) {
-			// 	console.log(dataframe.toString())
-			// }
+			if (this._states.knownDeviceIds.indexOf(dataframe.deviceId) < 0) {
+				this._states.knownDeviceIds.push(dataframe.deviceId)
+				this._states.knownDeviceIds.sort()
+			}
 
-			// if (dataframe.deviceId != 0x40 && dataframe.deviceId != 0x60
-			// 	&& dataframe.deviceId != DeviceID.전등 && dataframe.deviceId != DeviceID.원격검침기 && dataframe.deviceId != DeviceID.대기전력차단기기
-			// 	// && dataframe.deviceId != DeviceID.일괄차단기
-			// 	&& dataframe.deviceId != DeviceID.가스밸브 && dataframe.deviceId != DeviceID.온도조절기) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-
-			// if (dataframe.deviceId == DeviceID.전등 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
-			//     this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (DeviceID[dataframe.deviceId] != undefined && dataframe.deviceId != DeviceID.온도조절기) {
-			//     this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (dataframe.deviceId == DeviceID.대기전력차단기기 && dataframe.commandType == CommandType.상태응답) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-
-			// if (dataframe.deviceId == DeviceID.원격검침기) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType == CommandType.상태응답) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType == CommandType.상태응답 && dataframe.subId != 0x03) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (dataframe.deviceId == DeviceID.원격검침기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-
-			// if (dataframe.deviceId == DeviceID.일괄차단기) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-			// if (dataframe.deviceId == DeviceID.일괄차단기 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-
-			// if (dataframe.deviceId == 0x40 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
-			// 	this.vorpal.log("dataframe=", dataframe.toString())
-			// }
-
-			if (dataframe.deviceId != 0x40 && dataframe.commandType != CommandType.상태요구 && dataframe.commandType != CommandType.상태응답) {
-				this.vorpal.log("dataframe=", dataframe.toString())
+			if (this._states.filter.deviceIds.indexOf(dataframe.deviceId) >= 0) {
+				this.vorpal.log(`${dataframe.toString()}`)
 			}
 		})
 
@@ -131,6 +111,31 @@ class Commands {
 		const dataframe = new DataFrame(deviceId, subId, commandType)
 		this.socket?.write(dataframe.toBuffer())
 		this.vorpal.log(`${dataframe.toString()}`)
+	}
+
+	async show(args: Vorpal.Args) {
+		const { deviceId } = args
+
+		if (this._states.filter.deviceIds.indexOf(deviceId) < 0) this._states.filter.deviceIds.push(deviceId)
+	}
+
+	async hide(args: Vorpal.Args) {
+		const { deviceId } = args
+
+		const index = this._states.filter.deviceIds.indexOf(deviceId)
+		if (index >= 0) this._states.filter.deviceIds.splice(index, 1)
+	}
+
+	async states(args: Vorpal.Args) {
+		const table = new Table({
+			head: ["Name", "DeviceID"]
+		})
+
+		for (const deviceId of this._states.knownDeviceIds) {
+			table.push([ `${DeviceID[deviceId]}`, `0x${Buffer.from([ deviceId ]).toString("hex")} (${deviceId})` ])
+		}
+
+		this.vorpal.log(table.toString())
 	}
 
 }
