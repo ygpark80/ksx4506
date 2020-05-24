@@ -3,7 +3,11 @@ import chalk from "chalk"
 import _debug from "debug"
 import JSON5 from "json5"
 
+import { add, xor } from "./utils"
+
 export class KSX4506 extends Transform {
+
+	static HEADER = 0xf7
 
 	stack: number[] = []
 
@@ -37,7 +41,7 @@ export class KSX4506 extends Transform {
 
 	__processStack() {
 		for (let i = 0; i < this.stack.length; i++) {
-			if (this.stack[i] !== 0xf7) {
+			if (this.stack[i] !== KSX4506.HEADER) {
 				// stack = stack.slice(1)
 				// break
 				// console.log("--skip")
@@ -172,14 +176,14 @@ export class DataFrame {
 	}
 
 	toBuffer() {
-		const withoutData = Buffer.from([Header, this.deviceId, this.subId, this.commandType, this.length])
+		const withoutData = Buffer.from([KSX4506.HEADER, this.deviceId, this.subId, this.commandType, this.length])
 		const beforeXOR = this.data ? Buffer.concat([withoutData, this.data]) : withoutData
 		const _xor = xor(beforeXOR)
 		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
 		const _add = add(beforeADD)
-		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
-
-		return checksum
+		
+		const buffer = Buffer.concat([beforeADD, Buffer.from([_add])])
+		return buffer
 	}
 
 	public toString = (): string => {
@@ -337,8 +341,6 @@ export class DataFrame {
 	}
 }
 
-const Header = 0xf7
-
 export enum DeviceID {
 	시스템에어컨 = 0x02,
 	전자레인지 = 0x04,
@@ -389,20 +391,4 @@ export enum CommandType {
 	예약기능ONOFF동작제어응답 = 0xc5,
 	외출기능ONOFF동작제어응답 = 0xc6,
 	온수전용ONOFF동작제어응답 = 0xc7,
-}
-
-export function xor(buffer: Buffer) {
-	let result = buffer[0]
-	for (let i = 1; i < buffer.length; i++) {
-		result = result ^ buffer[i]
-	}
-	return result
-}
-
-export function add(buffer: Buffer) {
-	let result = buffer[0]
-	for (let i = 1; i < buffer.length; i++) {
-		result = (result + buffer[i]) % 256
-	}
-	return result
 }
