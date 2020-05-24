@@ -1,11 +1,16 @@
 import Vorpal from "vorpal"
 import net from "net"
-import { KSX4506, CommandType, DeviceID, 온도조절기, 전등, 원격검침기, DataFrame } from "./ksx4506"
+import { KSX4506, CommandType, DeviceID, 온도조절기, 전등, 원격검침기, DataFrame, ONOFF } from "./ksx4506"
 import JSON5 from "json5"
 import Table from "cli-table3"
 
 export function commands(vorpal: Vorpal) {
 	new Commands(vorpal)
+}
+
+interface Device {
+	deviceId: number
+	subIds: number[]
 }
 
 class Commands {
@@ -18,7 +23,8 @@ class Commands {
 		filter: {
 			deviceIds: [] as number[]
 		},
-		knownDeviceIds: [] as number[]
+		devices: {} as { [key: string]: Device },
+		lights: {} as { [key: string]: ONOFF[] }
 	}
 
 	constructor(private vorpal: Vorpal) {
@@ -45,7 +51,7 @@ class Commands {
 		vorpal
 			.command("command <deviceId> <subId> <commandType>")
 			.action((args) => this.command(args))
-		
+
 		vorpal
 			.command("show <deviceId> [commandType]")
 			.action((args) => this.show(args))
@@ -55,22 +61,29 @@ class Commands {
 			.action((args) => this.hide(args))
 
 		vorpal
-			.command("states")
-			.action((args) => this.states(args))
+			.command("discovered")
+			.action((args) => this.discovered(args))
 
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
 
-			if (this._states.knownDeviceIds.indexOf(dataframe.deviceId) < 0) {
-				this._states.knownDeviceIds.push(dataframe.deviceId)
-				this._states.knownDeviceIds.sort()
+			// lights
+			if (dataframe.deviceId == DeviceID.전등 && dataframe.commandType == CommandType.상태응답 && dataframe.data) {
+				const states = 전등.parseData(dataframe.data)
+				this._states.lights[dataframe.subId.toString()] = states
 			}
 
+			// devices
+			let device = this._states.devices[dataframe.deviceId.toString()]
+			if (!device) this._states.devices[dataframe.deviceId.toString()] = device = { deviceId: dataframe.deviceId, subIds: [] }
+			if (device.subIds.indexOf(dataframe.subId) < 0) device.subIds.push(dataframe.subId)
+			device.subIds.sort()
+
+			// show
 			if (this._states.filter.deviceIds.indexOf(dataframe.deviceId) >= 0) {
 				this.vorpal.log(`${dataframe.toString()}`)
 			}
 		})
-
 	}
 
 	async connect(args: Vorpal.Args) {
@@ -126,16 +139,34 @@ class Commands {
 		if (index >= 0) this._states.filter.deviceIds.splice(index, 1)
 	}
 
-	async states(args: Vorpal.Args) {
-		const table = new Table({
-			head: ["Name", "DeviceID"]
-		})
+	async discovered(args: Vorpal.Args) {
+		{
+			const table = new Table({ head: ["Name", "DeviceID", "SubIDs"] })
+			for (const deviceId of Object.keys(this._states.devices)) {
+				const device = this._states.devices[deviceId]
+				table.push([
+					`${DeviceID[device.deviceId]}`,
+					toHexString(device.deviceId),
+					device.subIds.map((subId) => toHexString(subId)).join(", ")
+				])
+			}
 
-		for (const deviceId of this._states.knownDeviceIds) {
-			table.push([ `${DeviceID[deviceId]}`, `0x${Buffer.from([ deviceId ]).toString("hex")} (${deviceId})` ])
+			this.vorpal.log("Devices:")
+			this.vorpal.log(table.toString())
 		}
+		{
+			const table = new Table({ head: ["DeviceID", "SubID", "전등1", "전등2", "전등3"] })
+			for (const subId of Object.keys(this._states.lights)) {
+				table.push([toHexString(DeviceID.전등), toHexString(Number(subId)), ...this._states.lights[subId]])
+			}
 
-		this.vorpal.log(table.toString())
+			this.vorpal.log("Lights:")
+			this.vorpal.log(table.toString())
+		}
 	}
 
+}
+
+function toHexString(value: number) {
+	return `0x${Buffer.from([value]).toString("hex")} (${value})`
 }

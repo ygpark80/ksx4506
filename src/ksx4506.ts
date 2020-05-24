@@ -139,6 +139,8 @@ export class 온도조절기 {
 
 }
 
+export type ONOFF = "ON" | "OFF"
+
 export class 전등 {
 
 	// 표준이랑 다름
@@ -148,6 +150,14 @@ export class 전등 {
 		// data0 = ??
 		const data = command == "ON" ? Buffer.from([index, 1, 0]) : Buffer.from([index, 0, 0])
 		return new DataFrame(DeviceID.전등, subId, CommandType.개별동작제어요구, data)
+	}
+
+	static parseData(data: Buffer) {
+		const states: ONOFF[] = []
+		for (let i = 1; i < data.length; i++) {
+			states.push(data[i] == 1 ? "ON" : "OFF")
+		}
+		return states
 	}
 
 }
