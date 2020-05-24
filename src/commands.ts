@@ -1,8 +1,9 @@
 import Vorpal from "vorpal"
 import net from "net"
-import { KSX4506, CommandType, DeviceID, 온도조절기, 전등, 원격검침기, DataFrame, ONOFF } from "./ksx4506"
+import { KSX4506, CommandType, DeviceID, DataFrame, ONOFF } from "./ksx4506"
 import JSON5 from "json5"
 import Table from "cli-table3"
+import { 전등, 온도조절기, 원격검침기 } from "./devices"
 
 export function commands(vorpal: Vorpal) {
 	new Commands(vorpal)
@@ -39,6 +40,10 @@ class Commands {
 		vorpal
 			.command("light <subId> <index> <command>")
 			.action((args) => this.light(args))
+		
+		vorpal
+			.command("light feature <subId>")
+			.action((args) => this.lightFeature(args))
 
 		vorpal
 			.command("measure <subId>")
@@ -61,8 +66,8 @@ class Commands {
 			.action((args) => this.hide(args))
 
 		vorpal
-			.command("discovered")
-			.action((args) => this.discovered(args))
+			.command("now")
+			.action((args) => this.now(args))
 
 		this.parser.on("data", (data) => {
 			const dataframe = KSX4506.parse(data)
@@ -81,6 +86,10 @@ class Commands {
 
 			// show
 			if (this._states.filter.deviceIds.indexOf(dataframe.deviceId) >= 0) {
+				this.vorpal.log(`${dataframe.toString()}`)
+			}
+
+			if (dataframe.deviceId == DeviceID.전등 && dataframe.commandType == CommandType.특성응답) {
 				this.vorpal.log(`${dataframe.toString()}`)
 			}
 		})
@@ -102,6 +111,14 @@ class Commands {
 		this.vorpal.log(`${JSON5.stringify(args)}`)
 		this.socket?.write(전등.개별동작(subId, index, command == "on" ? "ON" : "OFF").toBuffer())
 		this.vorpal.log(`${전등.개별동작(subId, index, command == "on" ? "ON" : "OFF").toString()}`)
+	}
+
+	async lightFeature(args: Vorpal.Args) {
+		const { subId } = args
+
+		const message = new DataFrame(DeviceID.전등, subId, CommandType.특성요구)
+		this.socket?.write(message.toBuffer())
+		this.vorpal.log(`${message.toString()}`)
 	}
 
 	async measure(args: Vorpal.Args) {
@@ -139,7 +156,7 @@ class Commands {
 		if (index >= 0) this._states.filter.deviceIds.splice(index, 1)
 	}
 
-	async discovered(args: Vorpal.Args) {
+	async now(args: Vorpal.Args) {
 		{
 			const table = new Table({ head: ["Name", "DeviceID", "SubIDs"] })
 			for (const deviceId of Object.keys(this._states.devices)) {
