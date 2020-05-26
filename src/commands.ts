@@ -14,19 +14,23 @@ interface Device {
 	subIds: number[]
 }
 
+class State {
+
+	filter: { deviceIds: number[] } = { deviceIds: [] }
+
+	devices: { [key: number]: Device } = {}
+
+	lights: { [key: number]: ONOFF[] } = {}
+
+}
+
 class Commands {
 
 	parser = new KSX4506()
 
 	socket?: net.Socket
 
-	_states = {
-		filter: {
-			deviceIds: [] as number[]
-		},
-		devices: {} as { [key: string]: Device },
-		lights: {} as { [key: string]: ONOFF[] }
-	}
+	_states: State = new State()
 
 	constructor(private vorpal: Vorpal) {
 		vorpal
@@ -40,7 +44,7 @@ class Commands {
 		vorpal
 			.command("light <subId> <index> <command>")
 			.action((args) => this.light(args))
-		
+
 		vorpal
 			.command("light feature <subId>")
 			.action((args) => this.lightFeature(args))
@@ -75,12 +79,12 @@ class Commands {
 			// lights
 			if (dataframe.deviceId == DeviceID.전등 && dataframe.commandType == CommandType.상태응답 && dataframe.data) {
 				const states = 전등.parseData(dataframe.data)
-				this._states.lights[dataframe.subId.toString()] = states
+				this._states.lights[dataframe.subId] = states
 			}
 
 			// devices
-			let device = this._states.devices[dataframe.deviceId.toString()]
-			if (!device) this._states.devices[dataframe.deviceId.toString()] = device = { deviceId: dataframe.deviceId, subIds: [] }
+			let device = this._states.devices[dataframe.deviceId]
+			if (!device) this._states.devices[dataframe.deviceId] = device = { deviceId: dataframe.deviceId, subIds: [] }
 			if (device.subIds.indexOf(dataframe.subId) < 0) device.subIds.push(dataframe.subId)
 			device.subIds.sort()
 
@@ -160,7 +164,7 @@ class Commands {
 		{
 			const table = new Table({ head: ["Name", "DeviceID", "SubIDs"] })
 			for (const deviceId of Object.keys(this._states.devices)) {
-				const device = this._states.devices[deviceId]
+				const device = this._states.devices[Number(deviceId)]
 				table.push([
 					`${DeviceID[device.deviceId]}`,
 					toHexString(device.deviceId),
@@ -174,7 +178,7 @@ class Commands {
 		{
 			const table = new Table({ head: ["DeviceID", "SubID", "전등1", "전등2", "전등3"] })
 			for (const subId of Object.keys(this._states.lights)) {
-				table.push([toHexString(DeviceID.전등), toHexString(Number(subId)), ...this._states.lights[subId]])
+				table.push([toHexString(DeviceID.전등), toHexString(Number(subId)), ...this._states.lights[Number(subId)]])
 			}
 
 			this.vorpal.log("Lights:")
