@@ -1,8 +1,13 @@
 import { Transform, TransformCallback } from "stream"
 import chalk from "chalk"
 import _debug from "debug"
+import JSON5 from "json5"
 
-export class KSX4506Parser extends Transform {
+import { add, xor } from "./utils"
+
+export class KSX4506 extends Transform {
+
+	static HEADER = 0xf7
 
 	stack: number[] = []
 
@@ -22,13 +27,12 @@ export class KSX4506Parser extends Transform {
 			try {
 				const dataframe = this.__processStack()
 				if (dataframe) {
-					// this.push(dataframe)
-					this.push(KSX4506Parser.parse(dataframe))
+					this.push(dataframe)
 					this.debug(`${chalk.bold.blueBright(">>")} ${dataframe.toString("hex")}${chalk.white(Buffer.from(this.stack).toString("hex"))}`)
 				}
 				if (!dataframe) break
 			} catch (e) {
-				console.log(e, e.stack)
+				// console.log(e, e.stack)
 			}
 		} while (true)
 
@@ -37,7 +41,7 @@ export class KSX4506Parser extends Transform {
 
 	__processStack() {
 		for (let i = 0; i < this.stack.length; i++) {
-			if (this.stack[i] !== 0xf7) {
+			if (this.stack[i] !== KSX4506.HEADER) {
 				// stack = stack.slice(1)
 				// break
 				// console.log("--skip")
@@ -70,14 +74,13 @@ export class KSX4506Parser extends Transform {
 			const _add = add(beforeADD)
 			const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
 
-			const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
 			const data = Buffer.from(this.stack.slice(i, i + 4 + length + 2 + 1))
 
 			this.stack = this.stack.slice(i + 4 + length + 2 + 1)
 
 			if (data.compare(checksum) !== 0) {
-				console.log("data:", data, i, this.stack.length)
-				console.log("chec:", checksum)
+				// console.log("data:", data, i, this.stack.length)
+				// console.log("chec:", checksum)
 				throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
 			}
 
@@ -87,25 +90,15 @@ export class KSX4506Parser extends Transform {
 	}
 
 	static parse(data: Buffer): DataFrame {
-		const header = data[0]
 		const deviceId = data[1]
 		const subId = data[2]
 		const commandType = data[3]
 		const length = data[4]
 		const _data = length > 0 ? data.subarray(5, 5 + length) : undefined
 
-		const withoutData = Buffer.from([header, deviceId, subId, commandType, length])
-		const beforeXOR = _data ? Buffer.concat([withoutData, _data]) : withoutData
-		const _xor = xor(beforeXOR)
-		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
-		const _add = add(beforeADD)
-		const checksum = Buffer.concat([beforeADD, Buffer.from([_add])])
+		const result = new DataFrame(deviceId, subId, commandType, _data)
 
-		const result = { header, deviceId, subId, commandType, length, data: _data, xor: _xor, add: _add }
-
-		if (data.compare(checksum) !== 0) {
-			// console.log("data:", data)
-			// console.log("checksum: ", checksum)
+		if (data.compare(result.toBuffer()) !== 0) {
 			throw new Error(`Cannot parse data: 0x${data.toString("hex")}`)
 		}
 
@@ -114,15 +107,39 @@ export class KSX4506Parser extends Transform {
 
 }
 
-export interface DataFrame {
-	header: number
-	deviceId: number
-	subId: number
-	commandType: number
-	length: number
-	data?: Buffer
-	xor: number
-	add: number
+export type ONOFF = "ON" | "OFF"
+
+export class DataFrame {
+
+	constructor(public deviceId: DeviceID, public subId: number, public commandType: CommandType, public data?: Buffer) {
+	}
+
+	get length() {
+		return this.data ? this.data.length : 0
+	}
+
+	toBuffer() {
+		const withoutData = Buffer.from([KSX4506.HEADER, this.deviceId, this.subId, this.commandType, this.length])
+		const beforeXOR = this.data ? Buffer.concat([withoutData, this.data]) : withoutData
+		const _xor = xor(beforeXOR)
+		const beforeADD = Buffer.concat([beforeXOR, Buffer.from([_xor])])
+		const _add = add(beforeADD)
+		
+		const buffer = Buffer.concat([beforeADD, Buffer.from([_add])])
+		return buffer
+	}
+
+	public toString = (): string => {
+		const result: any = {
+			DeviceID: `${DeviceID[this.deviceId]} (0x${Buffer.from([this.deviceId]).toString("hex")})`,
+			SubID: `${this.subId} (0x${Buffer.from([this.subId]).toString("hex")})`,
+			CommandType: `${CommandType[this.commandType]} (0x${Buffer.from([this.commandType]).toString("hex")})`,
+			Length: this.length,
+			Data: this.data ? `${this.data?.toString("hex")} (${this.data?.map((v) => v).join(" ")})` : undefined
+		}
+
+		return JSON5.stringify(result, null, 2)
+	}
 }
 
 export enum DeviceID {
@@ -145,28 +162,34 @@ export enum DeviceID {
 	대기전력차단기기 = 0x39
 }
 
+// CommandType이 device 당 있어야 함
+// 상속 구조도 가능함 (상태요구, 특성요구 같은건 항상 있음)
 export enum CommandType {
 	상태요구 = 0x01,
 	특성요구 = 0x0f,
+	상태응답 = 0x81,
+	특성응답 = 0x8f,
+
+	// 조명
 	개별동작제어요구 = 0x41,
 	개별동작제어응답 = 0xc1,
+
 	전체동작제어요구 = 0x42,
-	상태응답 = 0x81,
-	특성응답 = 0x8f
-}
 
-export function xor(buffer: Buffer) {
-	let result = buffer[0]
-	for (let i = 1; i < buffer.length; i++) {
-		result = result ^ buffer[i]
-	}
-	return result
-}
+	차단설정값설정요구 = 0x43,
+	차단설정값요구 = 0x31,
+	차단설정값설정응답 = 0xc3,
+	차단설정값응답 = 0xb1,
 
-export function add(buffer: Buffer) {
-	let result = buffer[0]
-	for (let i = 1; i < buffer.length; i++) {
-		result = (result + buffer[i]) % 256
-	}
-	return result
+	// 온도조절기
+	난방ONOFF동작제어요구 = 0x43,
+	설정온도변경동작제어요구 = 0x44,
+	외출기능ONOFF동작제어요구 = 0x45,
+	예약기능ONOFF동작제어요구 = 0x46,
+	온수전용ONOFF동작제어요구 = 0x47,
+	난방ONOFF동작제어응답 = 0xc3,
+	설정온도변경동작제어응답 = 0xc4,
+	예약기능ONOFF동작제어응답 = 0xc5,
+	외출기능ONOFF동작제어응답 = 0xc6,
+	온수전용ONOFF동작제어응답 = 0xc7,
 }
